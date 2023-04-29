@@ -1,101 +1,80 @@
 import os
+import traceback
 
 import discord
-import sqlite3
-import datetime
+from discord import app_commands
 from discord.ext import tasks
 from dotenv import load_dotenv
 
 load_dotenv()
 
 ONE_WEEK = 604800  # 604800 seconds = 1 week
-DATABASE = "meetings.db"
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-
-intents = discord.Intents.default()
-intents.message_content = True
-
-client = discord.Client(intents=intents)
-
-conn = sqlite3.connect(DATABASE)
-
-conn.execute(
-    """CREATE TABLE IF NOT EXISTS meetings
-             (id INTEGER PRIMARY KEY,
-             date TEXT NOT NULL)"""
-)
+GUILD_ID = discord.Object(int(os.getenv("GUILD_ID")))
 
 
-@client.event
-async def on_ready():
-    print("Logged in as {0.user}".format(client))
-    weekly_reminder.start()
+class MyClient(discord.Client):
+    def __init__(self) -> None:
+        intents = discord.Intents.default()
+        super().__init__(intents=intents)
+
+        self.tree = app_commands.CommandTree(self)
+
+    async def on_ready(self) -> None:
+        print(f'Logged in as {self.user} (ID: {self.user.id})')
+        print('------')
+
+    async def setup_hook(self) -> None:
+        await self.tree.sync(guild=GUILD_ID)
+
+    @tasks.loop(seconds=ONE_WEEK)
+    async def post_upcoming_meetings(self):
+        channel = self.get_channel(CHANNEL_ID)
+
+        # TODO: Flesh this out with grabbing dates from db
+        await channel.send("test")
 
 
-@tasks.loop(
-    count=None, seconds=ONE_WEEK
-)
-async def weekly_reminder():
-    cursor = conn.cursor()
-    cursor.execute("SELECT date FROM meetings ORDER BY date ASC LIMIT 1")
-    result = cursor.fetchone()
-    if result:
-        meeting_date = datetime.datetime.strptime(result[0], "%Y-%m-%d").date()
-        days_until = (meeting_date - datetime.date.today()).days
-        if days_until == 1:
-            response = "The next meeting is tomorrow!"
-        elif days_until == 7:
-            response = "The next meeting is in one week!"
-        else:
-            response = "There are no meetings scheduled."
-    else:
-        response = "There are no meetings scheduled."
-    channel = client.get_channel(CHANNEL_ID)
-    await channel.send(response)
+class AddMeeting(discord.ui.Modal, title='Feedback'):
+    meeting_date = discord.ui.TextInput(
+        label='Meeting Date',
+    )
+
+    leader = discord.ui.TextInput(
+        label='Leader',
+        required=False
+    )
+
+    topic = discord.ui.TextInput(
+        label='Topic',
+        required=False
+    )
+
+    feedback = discord.ui.TextInput(
+        label='Notes',
+        style=discord.TextStyle.long,
+        placeholder='Type your comment here...',
+        required=False,
+        max_length=300,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'Meeting added, thanks for doing that {interaction.user.name}!',
+                                                ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
+
+        traceback.print_exception(type(error), error, error.__traceback__)
 
 
-@client.event
-async def on_message(message):
-    if message.content.startswith("!schedule"):
-        await message.channel.send(get_all_meetings())
-    elif message.content.startswith("!addmeeting"):
-        date_str = message.content.split(" ")[1]
-        return add_meeting(date_str)
-    else:
-        return "I don't have any more commands. Pray to god that I have the strength to find more."
+client = MyClient()
 
 
-def get_all_meetings():
-    cursor = conn.cursor()
-    cursor.execute("SELECT date FROM meetings ORDER BY date ASC")
-    result = cursor.fetchone()
-    if result:
-        # TODO: List all meetings
-        for meeting in result:
-            response += "The next meeting is in {} days on {}.".format(
-                days_until, meeting_date.strftime("%A, %B %d")
-            )
-    else:
-        response = "There are no meetings scheduled."
-
-    return response
-
-
-def add_meeting(date):
-    # TODO: Evaluate date, if bad error
-    meeting_date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-
-    try:
-        conn.execute("INSERT INTO meetings (date) VALUES (?)", (meeting_date,))
-        conn.commit()
-        response = "Meeting scheduled for {}.".format(
-            meeting_date.strftime("%A, %B %d")
-        )
-    except (IndexError, ValueError):
-        response = "Invalid date format. Please use YYYY-MM-DD."
-
-    return response
+@client.tree.command(name='add', description="Add a new meeting")
+async def add_meeting(interaction: discord.Interaction):
+    await interaction.response.send_modal(AddMeeting())
 
 
 client.run(TOKEN)
