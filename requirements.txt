@@ -26,3 +26,4 @@ typing_extensions==4.5.0
 virtualenv==20.22.0
 yarl==1.9.1
 python-dotenv~=1.0.0
+SQLAlchemy~=2.0.11
