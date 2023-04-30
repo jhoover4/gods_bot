@@ -10,7 +10,7 @@ from db import Database
 
 load_dotenv()
 
-ONE_WEEK = 604800  # 604800 seconds = 1 week
+TASK_SECONDS = int(os.getenv("REMINDER_SECONDS_WAIT"))
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
@@ -24,7 +24,7 @@ class MyClient(discord.Client):
 
         self.tree = app_commands.CommandTree(self)
 
-    @tasks.loop(seconds=ONE_WEEK)
+    @tasks.loop(seconds=TASK_SECONDS)
     async def send_info(self):
         database = Database()
         try:
