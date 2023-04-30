@@ -58,7 +58,7 @@ class AddMeeting(discord.ui.Modal, title='Add Meeting'):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         database = Database()
 
-        passed = database.insert_meeting(self.meeting_date.value, self.leader.value, self.topic.value, self.notes.value)
+        passed = database.insert_meeting(self.meeting_date.value, self.leader.value.lower(), self.topic.value, self.notes.value)
         if passed:
             msg = f"I've prayed for a meeting to be added on {self.meeting_date.value}, let's only hope that the " \
                   f"spirit can guide us towards it {interaction.user.name}"
