@@ -1,12 +1,11 @@
 import datetime
+import traceback
 from typing import Optional, Type
 
 from sqlalchemy import Date, create_engine
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, Session
 
 DATABASE_NAME = "gods.db"
-
-conn = create_engine(f"sqlite:///../{DATABASE_NAME}")
 
 
 class Base(DeclarativeBase):
@@ -18,40 +17,56 @@ class Meeting(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[str] = mapped_column(Date())
-    leader: Mapped[str] = Mapped[Optional[str]]
-    topic: Mapped[str] = Mapped[Optional[str]]
-    notes: Mapped[str] = Mapped[Optional[str]]
+    leader: Mapped[Optional[str]]
+    topic: Mapped[Optional[str]]
+    notes: Mapped[Optional[str]]
 
     def __repr__(self) -> str:
-        return f"Meeting(id={self.id!r}, date={self.date!r}, leader={self.leader!r})"
+        return f"Meeting(id={self.id!r}, date={self.date!r}, leader={self.leader!r}, topic={self.topic!r}," \
+               f"notes={self.notes!r})"
 
 
-def add_meeting(submitted_date, leader, topic, notes) -> bool:
-    try:
-        meeting_date = datetime.datetime.strptime(submitted_date, "%d/%m/%y").date()
-    except ValueError:
-        return False
+class Database:
+    """Holds logic for dealing with the database. Is a singleton so that the database connection is only instantiated
+    once."""
 
-    with Session(conn) as session:
-        meeting = Meeting(date=meeting_date, leader=leader, topic=topic, notes=notes)
-        session.add(meeting)
-        session.commit()
+    def __init__(self):
+        self.engine = create_engine(f"sqlite:///{DATABASE_NAME}")
+        Base.metadata.create_all(self.engine)
 
-    return True
+    _instance = None
 
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Database, cls).__new__(cls)
+        return cls._instance
 
-def get_all_meetings() -> list[Type[Meeting]]:
-    with Session(conn) as session:
-        meetings = session.query(Meeting).all()
+    def insert_meeting(self, submitted_date, leader, topic, notes) -> bool:
+        try:
+            meeting_date = datetime.datetime.strptime(submitted_date, "%m/%d/%y")
+        except ValueError as e:
+            traceback.print_exception(type(e), e, e.__traceback__)
+            return False
 
-    return meetings
+        with Session(self.engine) as session:
+            meeting = Meeting(date=meeting_date, leader=leader, topic=topic, notes=notes)
+            session.add(meeting)
+            session.commit()
 
+        return True
 
-def get_all_meetings_formatted() -> str:
-    meetings = get_all_meetings()
+    def get_all_meetings(self) -> list[Type[Meeting]]:
+        with Session(self.engine) as session:
+            meetings = session.query(Meeting).all()
 
-    result = ""
-    for meeting in meetings:
-        result += f'{meeting.date}: Meeting will be led by {meeting.leader} and the topic will be {meeting.topic}\n'
+        return meetings
 
-    return result
+    def get_all_meetings_formatted(self) -> str:
+        meetings = self.get_all_meetings()
+
+        result = ""
+        for meeting in meetings:
+            result += f"**{meeting.date}**: Meeting will be led by {meeting.leader.title()} and the topic will be " \
+                      f"{meeting.topic}\n"
+
+        return result
