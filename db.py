@@ -68,6 +68,9 @@ class Database:
         for meeting in meetings:
             formatted_date = meeting.date.strftime("%m/%d")
             result += f"**{formatted_date}**: Meeting will be led by {meeting.leader.title()} and the topic will be " \
-                      f"{meeting.topic}\n"
+                      f"{meeting.topic}"
+            if meeting.notes:
+                result += f" Note: {meeting.notes}"
+            result += "\n"
 
         return result

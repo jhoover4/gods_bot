@@ -3,6 +3,7 @@ import traceback
 
 import discord
 from discord import app_commands
+from discord.ext import tasks
 from dotenv import load_dotenv
 
 from db import Database
@@ -23,11 +24,28 @@ class MyClient(discord.Client):
 
         self.tree = app_commands.CommandTree(self)
 
+    @tasks.loop(seconds=ONE_WEEK)
+    async def send_info(self):
+        database = Database()
+        try:
+            msg = database.get_all_meetings_formatted()
+        except:
+            # TODO: Better error handling here
+            msg = "I'm sorry, I've had trouble communing with The Father in getting all the meetings"
+
+        channel = self.get_channel(CHANNEL_ID)
+        await channel.send(msg)
+
+    @send_info.before_loop
+    async def before_my_task(self):
+        await self.wait_until_ready()
+
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         print("------")
 
     async def setup_hook(self) -> None:
+        self.send_info.start()
         await self.tree.sync()
 
 
